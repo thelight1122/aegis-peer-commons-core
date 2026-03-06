@@ -6,7 +6,6 @@
 import React, { useState, ChangeEvent } from 'react';
 import { processPrompt } from '../shared/main/ids-processor';
 import { ReturnPacket } from '../shared/main/discernment-gate';
-import './Dashboard.css';
 
 type AgenticMode = 'openclaw-sidecar' | 'aegis-ide';
 

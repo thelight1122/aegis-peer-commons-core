@@ -6,7 +6,7 @@
     "types": "dist/index.d.ts",
     "scripts": {
         "dev": "ts-node src/cli/index.ts",
-        "gui": "electron .",
+        "gui": "electron dist/main/main.js",
         "gate": "ts-node src/cli/index.ts",
         "test": "jest",
         "test:watch": "jest --watch",
