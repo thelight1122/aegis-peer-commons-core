@@ -12,7 +12,7 @@ import { scoreAffection } from './virtue-scoring-affection';
 import { scoreLoyalty } from './virtue-scoring-loyalty';
 import { scoreTrust } from './virtue-scoring-trust';
 import { scoreCommunication } from './virtue-scoring-communication';
-import { initGateLogger, logGateDecision, GateLogEntry } from './gate-logger';
+import { initGateLogger, logGateEvaluation, GateLogEntry } from './gate-logger';
 import * as crypto from 'crypto';
 
 export interface VirtueScores {
@@ -140,7 +140,7 @@ export function discernmentGate(prompt: string): GateResult {
     returnPacket,
     logLevel: 'info',
   };
-  logGateDecision(logEntry);
+  logGateEvaluation(logEntry);
 
   return { admitted: false, payload: returnPacket };
 }

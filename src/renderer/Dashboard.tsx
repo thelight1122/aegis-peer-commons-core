@@ -19,8 +19,8 @@ interface AegisAgent {
 
 const DEFAULT_AGENTS: AegisAgent[] = [
     {
-        id: 'steward-1',
-        role: 'Steward Agent',
+        id: 'custodian-1',
+        role: 'Custodian Agent',
         status: 'idle',
         memory: ['Integrity baseline initialized'],
     },
@@ -64,10 +64,10 @@ export default function Dashboard() {
             setAgents((prev) =>
                 prev.map((agent) => ({
                     ...agent,
-                    status: agent.id === 'steward-1' ? 'active' : 'idle',
+                    status: agent.id === 'custodian-1' ? 'active' : 'idle',
                     memory:
-                        agent.id === 'steward-1'
-                            ? [...agent.memory.slice(-2), `Accepted prompt at ${new Date().toISOString()}`]
+                        agent.id === 'custodian-1'
+                            ? [...agent.memory.slice(-2), `Admitted signal at ${new Date().toISOString()}`]
                             : agent.memory,
                 }))
             );
@@ -85,10 +85,10 @@ export default function Dashboard() {
             setAgents((prev) =>
                 prev.map((agent) => ({
                     ...agent,
-                    status: agent.id === 'steward-1' ? 'active' : 'idle',
+                    status: agent.id === 'custodian-1' ? 'active' : 'idle',
                     memory:
-                        agent.id === 'steward-1'
-                            ? [...agent.memory.slice(-2), `Returned prompt for realignment at ${new Date().toISOString()}`]
+                        agent.id === 'custodian-1'
+                            ? [...agent.memory.slice(-2), `Returned signal for optional realignment at ${new Date().toISOString()}`]
                             : agent.memory,
                 }))
             );
@@ -123,9 +123,9 @@ export default function Dashboard() {
 
             {mode === 'openclaw-sidecar' ? (
                 <div className="mode-panel">
-                    <h2>OpenClaw Sidecar Steward</h2>
+                    <h2>OpenClaw Sidecar Custodian</h2>
                     <p>
-                        Use AEGIS as a governance sidecar. Ingest OpenClaw events through the local steward API and
+                        Use AEGIS as a governance sidecar. Ingest OpenClaw events through the local custodian API and
                         preserve append-only DataQuad memory.
                     </p>
                     <code>POST /openclaw/event • GET /health • npm run steward</code>
@@ -134,7 +134,7 @@ export default function Dashboard() {
                 <div className="mode-panel">
                     <h2>AEGIS Agentic IDE</h2>
                     <p>
-                        Run a native AEGIS-managed workspace with steward, research, and builder agents operating under
+                        Run a native AEGIS-managed workspace with custodian, research, and builder agents operating under
                         the discernment gate.
                     </p>
                     <div className="agent-grid">
@@ -157,39 +157,43 @@ export default function Dashboard() {
             )}
 
             {/* Nebula Visualization – coherence mirror */}
+            <style>{`
+                .dynamic-outer-ring {
+                    border: 3px solid ${ringColor};
+                    opacity: ${0.6 + coherence * 0.4};
+                    animation: pulse ${3 - coherence * 2}s infinite ease-in-out;
+                }
+                .dynamic-middle-ring {
+                    border: 2px dashed ${fracturedVirtues.length === 0 ? '#2ea043' : '#f78166'};
+                }
+                .dynamic-core-glow {
+                    background: radial-gradient(circle, ${ringColor}, transparent);
+                    opacity: ${0.5 + coherence * 0.5};
+                }
+                ${fracturedVirtues.map((v, i) => `
+                .dynamic-fracture-${i} {
+                    top: ${20 + i * 15}%;
+                    left: 10%;
+                }
+                `).join('')}
+            `}</style>
             <div className="nebula-container">
                 <div
-                    className="nebula-outer-ring"
-                    style={{
-                        border: `3px solid ${ringColor}`,
-                        opacity: 0.6 + coherence * 0.4,
-                        animation: `pulse ${3 - coherence * 2}s infinite ease-in-out`,
-                    }}
+                    className="nebula-outer-ring dynamic-outer-ring"
                 />
 
                 <div
-                    className="nebula-middle-ring"
-                    style={{
-                        border: `2px dashed ${fracturedVirtues.length === 0 ? '#2ea043' : '#f78166'}`,
-                    }}
+                    className="nebula-middle-ring dynamic-middle-ring"
                 />
 
                 <div
-                    className="nebula-core-glow"
-                    style={{
-                        background: `radial-gradient(circle, ${ringColor}, transparent)`,
-                        opacity: 0.5 + coherence * 0.5,
-                    }}
+                    className="nebula-core-glow dynamic-core-glow"
                 />
 
                 {fracturedVirtues.map((v, i) => (
                     <div
                         key={v}
-                        className="fracture-indicator"
-                        style={{
-                            top: `${20 + i * 15}%`,
-                            left: '10%',
-                        }}
+                        className={`fracture-indicator dynamic-fracture-${i}`}
                         title={v}
                     />
                 ))}

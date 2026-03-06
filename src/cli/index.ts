@@ -25,7 +25,7 @@ function main() {
 
   const result = processPrompt(prompt);
 
-  console.log('┌─ Gate Decision');
+  console.log('┌─ Gate Evaluation');
   if ('phase' in result && result.phase === 'suggest') {
     // IDS result (admitted)
     console.log('│ Admitted – prompt passed integrity check');
