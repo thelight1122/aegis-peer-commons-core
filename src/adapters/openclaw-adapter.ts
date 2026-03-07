@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 
-import { discernmentGate, GateResult } from '../shared/main/discernment-gate';
+import { discernmentGate, GateResult, ReturnPacket } from '../shared/main/discernment-gate';
 
 import { DataQuadSnapshot } from './dataquad-schema';
 import { IDSResult, runIDS } from '../shared/main/ids-processor';
@@ -42,7 +42,7 @@ const emptyDataQuad: DataQuadSnapshot = {
 };
 
 const hashPrompt = (prompt: string): string => {
-  return `sha256:${createHash('sha256').update(prompt).digest('hex')}`;
+  return createHash('sha256').update(prompt).digest('hex').substring(0, 16);
 };
 
 export const buildDataQuadSnapshot = (event: OpenClawEvent): DataQuadSnapshot => {
@@ -78,12 +78,20 @@ export const buildOpenClawLogEntry = (
   };
 };
 
-export const processOpenClawEvent = (
+import { processPrompt } from '../shared/main/ids-processor';
+
+export const processOpenClawEvent = async (
   event: OpenClawEvent,
   options: OpenClawAdapterOptions = {}
-): OpenClawLogEntry => {
-  const gateResult = discernmentGate(event.prompt);
-  const idsResult = gateResult.admitted ? runIDS(gateResult.payload as string) : undefined;
+): Promise<OpenClawLogEntry> => {
+  const result = await processPrompt(event.prompt);
+
+  const admitted = !('status' in result && result.status === 'discernment_gate_return');
+  const gateResult: GateResult = {
+    admitted,
+    payload: admitted ? event.prompt : (result as ReturnPacket)
+  };
+  const idsResult = admitted ? (result as IDSResult) : (result as ReturnPacket).ids_observations;
 
   return buildOpenClawLogEntry(event, gateResult, idsResult, options);
 };

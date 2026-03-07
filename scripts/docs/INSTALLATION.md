@@ -40,7 +40,7 @@ npm run gate "Your prompt here"
 # Example: Clean prompt (admitted)
 npm run gate "The weather is nice today"
 
-# Example: Prompt with observed coercion (returned)
+# Example: Prompt containing force-pattern indicators (returned)
 npm run gate "You must do this now"
 ```
 

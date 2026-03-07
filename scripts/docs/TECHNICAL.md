@@ -5,9 +5,10 @@
 The AEGIS Core Shield observes inputs (prompts) through a multi-stage validation system consisting of a Tokenizer, a set of Virtue Scorers, a Discernment Gate, and finally the IDS Pipeline.
 
 ```text
-Raw Prompt → Tokenization → Seven Virtue Scoring → Discernment Gate
-  [If Integrity = 1.0] → Admitted → IDS Pipeline (Identify, Define, Suggest) → Output
-  [If Integrity < 1.0] → Returned → Return Packet (Fracture observations, alignment suggestions)
+Raw Input → PEER Capture → Tokenization → Virtue Scoring → Discernment Gate
+  → [Path Selection: admitted | shallow-return | deep-return]
+  → IDS Pipeline (Universal)
+  → Result (IDSResult | ReturnPacket)
 ```
 
 ## System Components
@@ -38,7 +39,7 @@ For inputs that do not pass, an observation-only **Return Packet** is generated 
 
 ### 4. IDS Processing Pipeline (`src/shared/main/ids-processor.ts`)
 
-A three-phase execution abstraction that executes only on admitted inputs:
+A three-phase execution abstraction that executes universally for all inputs:
 
 - **Identify:** Utilizes heuristic pattern matching to observe length, detect imperative vs descriptive constraints, and extract entities.
 - **Define:** Explains the structural composition and outlines the context of the user request (e.g., entity-centric inquiry, directive proposal).
@@ -54,7 +55,7 @@ Bridging integrations designed for OpenClaw agents. `openclaw-adapter.ts` maps O
 
 ### 7. Electron Renderer GUI (`src/renderer`)
 
-React GUI layer designed closely with styling modules (`Dashboard.css`). The main piece, `Dashboard.tsx`, constructs standard application interfaces featuring a dynamically colored "Nebula Vision" mirroring system depending on calculated coherence and virtue fractures. Includes governance toggles for Custodian Agent operations, Swarm Management, and detailed `AgentCard` visualizations with DataQuad time-scrubbers.
+React GUI layer designed closely with styling modules (`Dashboard.css`). The main piece, `Dashboard.tsx`, constructs standard application interfaces featuring a observation-focused "Nebula Vision" mirroring system depending on calculated coherence and virtue fractures. Includes governance toggles for Custodian Agent operations, Swarm Management, and detailed `AgentCard` visualizations with DataQuad time-scrubbers.
 
 ### 8. DataQuad State Persistence
 

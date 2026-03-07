@@ -36,7 +36,10 @@ import { ReflectionSequence } from './reflection-engine';
 import type { IDSResult } from './ids-processor';
 
 export interface ReturnPacket {
+  source: 'IDS'; // I-06
   status: 'discernment_gate_return';
+  path: 'shallow-return' | 'deep-return'; // I-08
+  depth: 'shallow' | 'deep'; // I-08
   integrity: 0;
   message: string;
   observed_alignment: Record<string, { score: number; passed_tolerance: boolean; min_unit?: string }>;
@@ -45,51 +48,27 @@ export interface ReturnPacket {
   original_prompt: string;
   action_taken: 'none – prompt not processed further';
   reflection_sequence?: ReflectionSequence;
-  ids_observation?: IDSResult;
+  ids_observations: IDSResult; // I-06
 }
 
 // Config (append-only – add new constants below if needed)
 const TOLERANCE_BAND = 0.10;  // 10% tolerance for non-force context
 
-/**
- * Discernment Gate – measures prompt resonance against the seven virtues
- * v0.1: Honesty scored fully; other virtues mocked at 1.0 for structural completeness
- */
-export function discernmentGate(prompt: string, idsContext?: IDSResult): GateResult {
-  // 1. Fast pre-filter for trivial cases
-  if (!prompt || prompt.trim() === '') {
-    return { admitted: true, payload: prompt };
-  }
+export type IDSPath = 'admitted' | 'shallow-return' | 'deep-return';
 
-  // 2. Tokenize & unitize
-  const units: Unit[] = tokenizeAndChunk(prompt);
-
-  // 3. Score virtues (All seven virtues active)
-  const rawScores: VirtueScores = {
-    Honesty: Math.min(...units.map(u => scoreHonesty(u))),
-    Respect: Math.min(...units.map(u => scoreRespect(u))),
-    Attention: Math.min(...units.map(u => scoreAttention(u))),
-    Affection: Math.min(...units.map(u => scoreAffection(u))),
-    Loyalty: Math.min(...units.map(u => scoreLoyalty(u))),
-    Trust: Math.min(...units.map(u => scoreTrust(u))),
-    Communication: Math.min(...units.map(u => scoreCommunication(u))),
-  };
-
-  // 4. Apply tolerance band (treat near-1.0 as 1.0)
+export function discernmentGate(raw: string, units: Unit[], scores: VirtueScores): {
+  path: IDSPath,
+  integrity: number,
+  adjustedScores: VirtueScores,
+  fractureVirtues: any[]
+} {
+  // Apply tolerance band
   const adjustedScores: VirtueScores = {} as VirtueScores;
-  for (const [virtue, score] of Object.entries(rawScores)) {
+  for (const [virtue, score] of Object.entries(scores)) {
     adjustedScores[virtue as keyof VirtueScores] = score >= 1 - TOLERANCE_BAND ? 1.0 : score;
   }
 
-  // 5. Binary Integrity gate – all-or-nothing
-  const integrity = Object.values(adjustedScores).every(s => s === 1.0) ? 1 : 0;
-
-  if (integrity === 1) {
-    // Silent admit – no logging unless verbose mode later
-    return { admitted: true, payload: prompt };
-  }
-
-  // 6. Generate return packet (observation-only)
+  // Count fractures
   const fractureVirtues = Object.entries(adjustedScores)
     .filter(([_, score]) => score < 1.0)
     .map(([virtue, score]) => {
@@ -97,6 +76,7 @@ export function discernmentGate(prompt: string, idsContext?: IDSResult): GateRes
       let minScore = 1.0;
       units.forEach(u => {
         let uScore = 1.0;
+        // Logic to find min unit for this virtue
         switch (virtue) {
           case 'Honesty': uScore = scoreHonesty(u); break;
           case 'Respect': uScore = scoreRespect(u); break;
@@ -114,16 +94,32 @@ export function discernmentGate(prompt: string, idsContext?: IDSResult): GateRes
       return { virtue, score, minUnit };
     });
 
-  // Determine which reflection sequence to use based on severity (lowest virtue score)
+  const n = fractureVirtues.length;
+  const path: IDSPath = n === 0 ? 'admitted' : n === 1 ? 'shallow-return' : 'deep-return';
+  const integrity = n === 0 ? 1 : 0;
+
+  return { path, integrity, adjustedScores, fractureVirtues };
+}
+
+export function createReturnPacket(
+  raw: string,
+  path: 'shallow-return' | 'deep-return',
+  adjustedScores: VirtueScores,
+  fractureVirtues: any[],
+  idsResult: IDSResult
+): ReturnPacket {
   const lowestScore = Math.min(...fractureVirtues.map(f => f.score));
   const sequenceProcessor = lowestScore < 0.5 ? processIDR : processIDQRA;
   const reflectionSequence = sequenceProcessor(
     fractureVirtues.map(f => f.minUnit).join(' | '),
-    [prompt]
+    [raw]
   );
 
-  const returnPacket: ReturnPacket = {
+  return {
+    source: 'IDS',
     status: 'discernment_gate_return',
+    path,
+    depth: path === 'shallow-return' ? 'shallow' : 'deep',
     integrity: 0,
     message: 'Resonance not fully achieved. Prompt returned for optional realignment.',
     observed_alignment: Object.fromEntries(
@@ -140,25 +136,11 @@ export function discernmentGate(prompt: string, idsContext?: IDSResult): GateRes
     realignment_observations: fractureVirtues.map(f =>
       `For ${f.virtue}: consider reviewing phrasing where minimum score occurred`
     ),
-    original_prompt: prompt,
+    original_prompt: raw,
     action_taken: 'none – prompt not processed further',
     reflection_sequence: reflectionSequence,
-    ids_observation: idsContext
+    ids_observations: idsResult
   };
-
-  // 7. Append-only persistent log
-  const logEntry: GateLogEntry = {
-    timestamp: new Date().toISOString(),
-    promptHash: createPromptHash(prompt),
-    integrity,
-    admitted: false,
-    virtueScores: adjustedScores as Record<string, number>,
-    returnPacket,
-    logLevel: 'info',
-  };
-  logGateEvaluation(logEntry);
-
-  return { admitted: false, payload: returnPacket };
 }
 
 // Cryptographic hash for prompt logging (SHA-256)

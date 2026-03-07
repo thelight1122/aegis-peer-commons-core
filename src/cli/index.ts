@@ -6,7 +6,7 @@
 import { discernmentGate } from '../shared/main/discernment-gate';
 import { processPrompt } from '../shared/main/ids-processor';
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
     console.log('Usage: npm run gate "your prompt here"');
@@ -23,7 +23,7 @@ function main() {
   console.log('└─ ' + prompt);
   console.log('');
 
-  const result = processPrompt(prompt);
+  const result = await processPrompt(prompt);
 
   console.log('┌─ Gate Evaluation');
   if ('phase' in result && result.phase === 'suggest') {

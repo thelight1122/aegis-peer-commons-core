@@ -21,13 +21,13 @@ describe('openclaw ingest', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test('ingestOpenClawEvent appends JSONL entry', () => {
+  test('ingestOpenClawEvent appends JSONL entry', async () => {
     const {
       ingestOpenClawEvent,
       getOpenClawLogFilePath,
     } = require('./openclaw-ingest') as typeof import('./openclaw-ingest');
 
-    const entry = ingestOpenClawEvent({
+    const entry = await ingestOpenClawEvent({
       agentId: 'agent-10',
       sessionId: 'session-10',
       requestId: 'req-10',
@@ -42,7 +42,7 @@ describe('openclaw ingest', () => {
     const raw = fs.readFileSync(logPath, 'utf8').trim();
     const parsed = JSON.parse(raw);
     expect(parsed.request_id).toBe('req-10');
-    expect(parsed.input.prompt_hash).toMatch(/^sha256:/);
+    expect(parsed.input.prompt_hash).toMatch(/^[a-f0-9]{16}$/);
   });
 
   test('createStewardServer handles health and validation failures', async () => {

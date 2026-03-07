@@ -21,13 +21,13 @@ describe('IDS Processor – Unit Tests', () => {
 
     test('Suggest phase: provides non-directive pathways', () => {
         const defResult = define(identify(prompt));
-        const result = suggest(defResult);
+        const result = suggest(defResult, 'admitted');
         expect(result.observations.some(obs => obs.includes('information retrieval pathway available'))).toBe(true);
         expect(result.observations.some(obs => obs.includes('Direct processing pathway available'))).toBe(true);
     });
 
     test('runIDS pipeline: completes all phases successfully', () => {
-        const result = runIDS(prompt);
+        const result = runIDS(prompt, 'admitted');
         expect(result.phase).toBe('suggest');
         expect(result.input).toBe(prompt);
     });

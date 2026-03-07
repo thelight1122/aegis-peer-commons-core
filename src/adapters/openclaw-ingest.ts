@@ -30,11 +30,11 @@ export const appendOpenClawLogEntry = (entry: OpenClawLogEntry): void => {
   fs.appendFileSync(OPENCLAW_LOG_FILE, `${JSON.stringify(entry)}\n`, 'utf8');
 };
 
-export const ingestOpenClawEvent = (
+export const ingestOpenClawEvent = async (
   event: OpenClawEvent,
   options: OpenClawAdapterOptions = {}
-): OpenClawLogEntry => {
-  const entry = processOpenClawEvent(event, options);
+): Promise<OpenClawLogEntry> => {
+  const entry = await processOpenClawEvent(event, options);
   appendOpenClawLogEntry(entry);
   return entry;
 };
@@ -114,7 +114,7 @@ export const createStewardServer = (options: IngestServerOptions = {}): http.Ser
         return;
       }
 
-      const entry = ingestOpenClawEvent(event, { hashPrompt });
+      const entry = await ingestOpenClawEvent(event, { hashPrompt });
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(entry));
     } catch (error) {

@@ -2,9 +2,9 @@
 
 ## Introduction
 
-The AEGIS Core Shield acts as your non-force governance gate to help refine, observe, and illuminate pathways for prompts toward a safe, coherent, and highly transparent system response mapping.
+The AEGIS Core Shield acts as a discernment layer designed to support observation and reflection of prompts. It surfaces coherence and fracture observations to facilitate transparent system response mapping.
 
-It accomplishes this via testing input through the 7 Virtues of Integrity. Prompts satisfying the requirement execute their intent through an **IDS (Identify, Define, Suggest)** output. If the requirements are not satisfied, a visual **Return Packet** guides the user on how to realign the prompt structurally.
+It accomplishes this via testing input through the 7 Virtues of Integrity. Prompts satisfying the requirement execute their intent through an **IDS (Identify, Define, Suggest)** output. If the requirements are not satisfied, a visual **Return Packet** provides observations to assist the user in reflecting on the signal patterns present.
 
 ## Using the CLI
 
@@ -15,7 +15,7 @@ npm run gate "Give me the status report."
 ```
 
 1. **Admitted Prompts**: Displays an IDS output detailing exactly what phases (Identify, Define, Suggest) discovered about the parsed text.
-2. **Returned Prompts**: Returns a formatted Return Packet with the underlying reason for returning. It will typically highlight specific unit clusters (words) that reduced a Virtue score below tolerance and provide realignment observations.
+2. **Returned Prompts**: Returns a formatted Return Packet with observations about signal patterns that produced fractures. It will typically highlight specific unit clusters (words) that reduced a Virtue score below tolerance and provide neutral observations for reflection.
 
 ## Using the Electron Dashboard (GUI)
 

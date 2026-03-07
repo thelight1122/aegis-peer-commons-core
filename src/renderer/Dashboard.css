@@ -94,14 +94,14 @@
 .reflection-sequence {
     margin-top: 6px;
     padding: 6px;
-    background: rgba(210, 168, 255, 0.1);
-    border: 1px solid rgba(210, 168, 255, 0.3);
+    background: rgba(88, 166, 255, 0.05);
+    border: 1px solid rgba(88, 166, 255, 0.2);
     border-radius: 4px;
     font-size: 0.8rem;
 }
 
 .reflection-sequence strong {
-    color: #d2a8ff;
+    color: #58a6ff;
     display: block;
     margin-bottom: 4px;
 }
@@ -109,7 +109,7 @@
 .reflection-stage {
     margin-bottom: 3px;
     padding-left: 6px;
-    border-left: 1px solid #d2a8ff;
+    border-left: 1px solid #58a6ff;
 }
 
 .stage-name {
@@ -152,10 +152,25 @@
     position: absolute;
     width: 20px;
     height: 20px;
-    background: #d2a8ff;
+    background: #58a6ff;
     border-radius: 50%;
-    box-shadow: 0 0 10px #d2a8ff;
+    box-shadow: 0 0 10px #58a6ff;
     animation: pulse 2s infinite;
+}
+
+.nebula-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.nebula-label {
+    font-size: 11px;
+    color: #8b949e;
+    font-style: italic;
+    text-align: center;
+    max-width: 240px;
 }
 
 .prompt-textarea {
@@ -248,7 +263,7 @@
 }
 
 .bg-returned {
-    background: #d2a8ff !important;
+    background: rgba(88, 166, 255, 0.6) !important;
 }
 
 .text-muted {
@@ -327,9 +342,9 @@
 }
 
 .badge-returned {
-    background: rgba(210, 168, 255, 0.15);
-    color: #d2a8ff;
-    border: 1px solid rgba(210, 168, 255, 0.4);
+    background: rgba(88, 166, 255, 0.1);
+    color: #8b949e;
+    border: 1px solid rgba(88, 166, 255, 0.3);
 }
 
 .coherence-bar-container {
