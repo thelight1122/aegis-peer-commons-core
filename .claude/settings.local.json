@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /i/aegis-peer-commons-core -iname *claude* -type f)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(where tsc:*)",
+      "Bash(npx --yes typescript tsc --version)",
+      "Bash(npm install:*)",
+      "Read(//c/Users/theli/AppData/Roaming/npm/**)",
+      "Bash(ls tsc*)",
+      "Bash(command -v tsc)",
+      "Bash(gh pr:*)"
+    ]
+  }
+}
