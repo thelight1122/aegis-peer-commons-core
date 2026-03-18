@@ -34,7 +34,7 @@ export {
   OpenClawLogEntry,
 } from './adapters/openclaw-adapter';
 
-// DataQuad schema and validation
+// DataQuad schema and validation — legacy exports preserved for compat
 export {
   DATAQUAD_JSON_SCHEMA,
   isDataQuadSnapshot,
@@ -42,6 +42,34 @@ export {
   DataQuadSnapshot,
   ValidationResult,
 } from './adapters/dataquad-schema';
+
+// DataQuad PCT/PEER/NCT/SPINE — new canonical types
+export {
+  DataQuadEntry,
+  PCTEntry,
+  PEEREntry,
+  PEERClassification,
+  NCTEntry,
+  SPINEEntry,
+  DataQuadBundle,
+} from './adapters/dataquad-schema';
+
+// DataQuad Session Manager
+export {
+  assembleContextBundle,
+  commitSessionResults,
+  detectGhost,
+  classifyPEERAnomaly,
+  generateUUID,
+  computeTopologyIndex,
+  computePatternSignature,
+  ContextBundle,
+  SessionWriteback,
+  GhostResult,
+} from './shared/main/dataquad-session';
+
+// Gate logger — new query functions for PEER/SPINE tensors
+export { readPEEREntriesByHash, readSPINEEntries } from './shared/main/gate-logger';
 
 
 // OpenClaw ingestion interface

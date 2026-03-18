@@ -8,6 +8,9 @@ import * as path from 'path';
 
 export interface GateLogEntry {
     event?: 'PEER_CAPTURE' | 'GATE_OUTCOME'; // I-04: Distinguish early capture from outcome
+    tensor?: 'PCT' | 'PEER' | 'NCT' | 'SPINE'; // which DataQuad tensor this entry targets
+    classification?: 'Noise' | 'Drift' | 'Ghost' | 'Glitch'; // PEER entries only
+    entryId?: string;               // UUID matching the DB entry_uuid
     timestamp: string;              // ISO 8601
     promptHash: string;             // cryptographic hash of prompt
     raw?: string;                   // I-04: Preserved raw input for PEER capture
@@ -102,5 +105,41 @@ export function getLogEntryCount(): number {
     } catch (error) {
         console.error('[Gate Logger] Failed to count log entries:', error);
         return 0;
+    }
+}
+
+/**
+ * Read all PEER tensor entries matching a given promptHash.
+ * Used by Ghost detection to identify recurring anomaly patterns.
+ */
+export function readPEEREntriesByHash(promptHash: string): GateLogEntry[] {
+    try {
+        if (!fs.existsSync(LOG_FILE)) return [];
+        const content = fs.readFileSync(LOG_FILE, 'utf8');
+        const lines = content.trim().split('\n').filter(l => l.length > 0);
+        return lines
+            .map(l => { try { return JSON.parse(l) as GateLogEntry; } catch { return null; } })
+            .filter((e): e is GateLogEntry => e !== null && e.tensor === 'PEER' && e.promptHash === promptHash);
+    } catch (error) {
+        console.error('[Gate Logger] Failed to read PEER entries by hash:', error);
+        return [];
+    }
+}
+
+/**
+ * Read all SPINE tensor entries from the log.
+ * Used by Ghost detection and context assembly.
+ */
+export function readSPINEEntries(): GateLogEntry[] {
+    try {
+        if (!fs.existsSync(LOG_FILE)) return [];
+        const content = fs.readFileSync(LOG_FILE, 'utf8');
+        const lines = content.trim().split('\n').filter(l => l.length > 0);
+        return lines
+            .map(l => { try { return JSON.parse(l) as GateLogEntry; } catch { return null; } })
+            .filter((e): e is GateLogEntry => e !== null && e.tensor === 'SPINE');
+    } catch (error) {
+        console.error('[Gate Logger] Failed to read SPINE entries:', error);
+        return [];
     }
 }

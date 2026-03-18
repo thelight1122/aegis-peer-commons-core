@@ -17,6 +17,7 @@ import { scoreCommunication } from './virtue-scoring-communication';
 import { logGateEvaluation } from './gate-logger';
 import * as dbModule from './db/database';
 import { saveAgentToDb, loadAgentFromDb, loadSwarmMemories, loadSwarmLearnings, loadSwarmAffects } from './db/database';
+import { assembleContextBundle, commitSessionResults } from './dataquad-session';
 import * as crypto from 'crypto';
 import { activeGovernancePolicy } from './governance-state';
 
@@ -232,7 +233,11 @@ export function suggest(defineResult: IDSResult, path: IDSPath, scores?: Record<
     const intent = defineResult.analysis?.intent;
 
     // Proactive Mirroring (I-13/I-15 collective)
-    const memories = agent?.swarmMemories || agent?.dataQuad.memory || [];
+    // Support both new DataQuadBundle shape (NCT.entries) and legacy (memory)
+    const memories = agent?.swarmMemories
+        || agent?.dataQuad?.NCT?.entries
+        || agent?.dataQuad?.memory
+        || [];
     if (memories.length > 0) {
         const lastMemory = memories[memories.length - 1];
         if (lastMemory.topologyIndex) {
@@ -241,9 +246,11 @@ export function suggest(defineResult: IDSResult, path: IDSPath, scores?: Record<
     }
 
     // Recursive Reflection (I-19)
-    if (agent && agent.dataQuad.affect.length > 0) {
-        const lastAffect = agent.dataQuad.affect[agent.dataQuad.affect.length - 1];
-        if (lastAffect.content.includes('Fracture detected')) {
+    // Support both new DataQuadBundle shape (PEER.entries) and legacy (affect)
+    const affects: any[] = agent?.dataQuad?.PEER?.entries ?? agent?.dataQuad?.affect ?? [];
+    if (affects.length > 0) {
+        const lastAffect = affects[affects.length - 1];
+        if (lastAffect.content?.includes('Fracture detected') || lastAffect.content?.includes('Gate fracture')) {
             observations.push('Meta-Reflection: Observed internal state shift following recent structural fracture');
             suggestions.push('Meta-Reflection: Prioritizing stability and alignment due to recent analytical drift');
         }
@@ -340,12 +347,25 @@ export async function processPrompt(rawPrompt: string, agentId: string = 'defaul
     let agent: any = null;
     const dbActive = dbModule.isDatabaseInitialized();
 
+    // Compute prompt hash for Session Manager pre-call assembly
+    const promptHash = `sha256:${crypto.createHash('sha256').update(rawPrompt).digest('hex')}`;
+
     if (dbActive) {
         agent = loadAgentFromDb(agentId);
         if (agent && agent.swarmId) {
             agent.swarmMemories = loadSwarmMemories(agent.swarmId);
             agent.swarmLearnings = loadSwarmLearnings(agent.swarmId);
             agent.swarmAffects = loadSwarmAffects(agent.swarmId);
+        }
+        // Pre-call: assemble context bundle from DataQuad
+        const contextBundle = assembleContextBundle(agentId, promptHash);
+        if (agent) {
+            // Attach bundle context to agent for use in suggest()
+            agent.dataQuad = agent.dataQuad ?? {};
+            if (contextBundle.ghostWarning) {
+                agent._ghostWarning = true;
+                agent._ghostPatternIds = contextBundle.ghostPatternIds;
+            }
         }
     }
 
@@ -355,7 +375,7 @@ export async function processPrompt(rawPrompt: string, agentId: string = 'defaul
             name: 'AEGIS Agent',
             role: 'steward',
             status: 'active',
-            dataQuad: { context: [], affect: [], memory: [], learning: [] }
+            dataQuad: { PCT: { entries: [] }, PEER: { entries: [] }, NCT: { entries: [] }, SPINE: { entries: [] } }
         };
     }
 
@@ -374,7 +394,11 @@ export async function processPrompt(rawPrompt: string, agentId: string = 'defaul
     };
 
     // 3. Discernment Gate routes within IDS (I-14/I-23 calibration)
-    const localCoherence = calculateCoherence(agent.dataQuad.memory || [], agent.dataQuad.affect || []);
+    // Support both new (NCT/PEER) and legacy (memory/affect) DataQuad shapes
+    const localCoherence = calculateCoherence(
+        agent.dataQuad?.NCT?.entries ?? agent.dataQuad?.memory ?? [],
+        agent.dataQuad?.PEER?.entries ?? agent.dataQuad?.affect ?? []
+    );
     let swarmCoherence = 1.0;
     if (agent.swarmId) {
         swarmCoherence = calculateCoherence(agent.swarmMemories || [], agent.swarmAffects || []);
@@ -384,29 +408,26 @@ export async function processPrompt(rawPrompt: string, agentId: string = 'defaul
     // 4. Universal IDS Flow (I-05 / I-13 mirroring)
     const idsResult = runIDS(rawPrompt, path, adjustedScores as Record<string, number>, agent);
 
-    // Update Agent State (I-11/I-12)
+    // Post-call: Session Manager writes PCT/PEER/NCT/SPINE entries (append-only)
     const timestamp = new Date().toISOString();
-    if (path === 'admitted') {
-        // Add to memory with topology index
-        agent.dataQuad.memory.push({
-            timestamp,
-            content: rawPrompt,
-            topologyIndex: calculateTopologyIndex(rawPrompt, timestamp)
-        });
 
-        // Add to learning (simplified)
-        agent.dataQuad.learning.push({
-            timestamp,
-            content: `Observed intent: ${idsResult.analysis?.intent.descriptive ? 'descriptive' : 'active'}`
-        });
-
-        // Entropy Management (I-17)
-        distillMemories(agent);
-
-        if (dbActive) {
-            saveAgentToDb(agent);
+    if (dbActive) {
+        // Ensure agent metadata row exists before Session Manager writes DataQuad entries
+        if (agent.id && agent.name) {
+            saveAgentToDb({ ...agent, dataQuad: {} }); // metadata-only upsert (empty quad skips inserts)
         }
+        commitSessionResults({
+            agentId,
+            promptHash,
+            rawPrompt,
+            path,
+            fractureVirtues: (fractureVirtues as any[]).map((f: any) => ({ virtue: f.virtue, score: f.score })),
+            timestamp,
+            admittedContent: path === 'admitted' ? rawPrompt : undefined,
+        });
+    }
 
+    if (path === 'admitted') {
         logGateEvaluation({
             event: 'GATE_OUTCOME',
             timestamp,
@@ -418,19 +439,6 @@ export async function processPrompt(rawPrompt: string, agentId: string = 'defaul
         return { ...idsResult, integrity };
     } else {
         const returnPacket = createReturnPacket(rawPrompt, path, adjustedScores, fractureVirtues, idsResult);
-
-        // Add to context/affect for returned paths
-        agent.dataQuad.affect.push({
-            timestamp,
-            content: `Fracture detected on path: ${path}`
-        });
-
-        // Entropy Management (I-17)
-        distillMemories(agent);
-
-        if (dbActive) {
-            saveAgentToDb(agent);
-        }
 
         logGateEvaluation({
             event: 'GATE_OUTCOME',

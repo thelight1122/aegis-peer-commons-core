@@ -5,6 +5,18 @@ import { pruneOldBackups } from '../backup-pruner';
 
 let db: Database.Database | null = null;
 
+/**
+ * Safely adds a column to a table — no-op if the column already exists.
+ * SQLite throws on duplicate columns; we catch and swallow that specific error.
+ */
+function safeAddColumn(database: Database.Database, table: string, column: string, type: string): void {
+    try {
+        database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    } catch (e: any) {
+        if (!e.message?.includes('duplicate column name')) throw e;
+    }
+}
+
 export function initDatabase(workspacePath: string) {
     const aegisDir = path.join(workspacePath, '.aegis');
     if (!fs.existsSync(aegisDir)) {
@@ -31,7 +43,7 @@ export function initDatabase(workspacePath: string) {
         CREATE TABLE IF NOT EXISTS dataquad_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             agent_id TEXT,
-            tensor_type TEXT, -- context, affect, memory, learning
+            tensor_type TEXT, -- PCT, PEER, NCT, SPINE (migrated from context/affect/memory/learning)
             timestamp TEXT,
             content TEXT,
             sequence_json TEXT, -- for reflection data
@@ -39,6 +51,26 @@ export function initDatabase(workspacePath: string) {
             FOREIGN KEY(agent_id) REFERENCES agents(id)
         );
     `);
+
+    // ── Migration 001: Rename tensor types to canonical PCT/PEER/NCT/SPINE names ──
+    // Safe to run repeatedly — only updates rows that still have old names.
+    db.exec(`
+        UPDATE dataquad_entries SET tensor_type = 'PCT'   WHERE tensor_type = 'context';
+        UPDATE dataquad_entries SET tensor_type = 'PEER'  WHERE tensor_type = 'affect';
+        UPDATE dataquad_entries SET tensor_type = 'NCT'   WHERE tensor_type = 'memory';
+        UPDATE dataquad_entries SET tensor_type = 'SPINE' WHERE tensor_type = 'learning';
+    `);
+
+    // ── Migration 002: Add new columns for rich entry metadata ──
+    safeAddColumn(db, 'dataquad_entries', 'entry_uuid', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'classification', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'prompt_hash', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'fracture_virtues_json', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'gate_path', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'linked_records_json', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'verified_at', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'pattern_signature', 'TEXT');
+    safeAddColumn(db, 'dataquad_entries', 'archived', 'INTEGER DEFAULT 0');
 }
 
 export function isDatabaseInitialized() {
@@ -53,7 +85,7 @@ export function getDb() {
 export function saveAgentToDb(agent: any) {
     const database = getDb();
 
-    // 1. Upsert Agent
+    // 1. Upsert Agent metadata (name, role, status, tools, swarm)
     const upsertAgent = database.prepare(`
         INSERT INTO agents (id, name, role, status, tools_json, swarm_id)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -74,11 +106,9 @@ export function saveAgentToDb(agent: any) {
         agent.swarmId || null
     );
 
-    // 2. Clear existing entries for this agent (or implement append-only logic better)
-    // For a true "Production" version, we might want to only append new entries
-    // But for simplicity of conversion, we'll clear and re-insert the latest quad window
-    database.prepare('DELETE FROM dataquad_entries WHERE agent_id = ?').run(agent.id);
-
+    // 2. Append-only DataQuad inserts — no DELETE.
+    // The Session Manager (dataquad-session.ts) handles structured writes.
+    // This path handles legacy agent objects that still carry the old quad shape.
     const insertEntry = database.prepare(`
         INSERT INTO dataquad_entries (agent_id, tensor_type, timestamp, content, sequence_json, topology_index)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -96,10 +126,16 @@ export function saveAgentToDb(agent: any) {
             );
         }
     };
-    insertTensor('context', agent.dataQuad.context);
-    insertTensor('affect', agent.dataQuad.affect);
-    insertTensor('memory', agent.dataQuad.memory);
-    insertTensor('learning', agent.dataQuad.learning);
+
+    // Support both legacy (context/affect/memory/learning) and new (PCT/PEER/NCT/SPINE) shapes.
+    // Legacy keys are mapped to new tensor type names on insert.
+    if (agent.dataQuad) {
+        const dq = agent.dataQuad;
+        insertTensor('PCT',   dq.PCT?.entries   ?? dq.context   ?? []);
+        insertTensor('PEER',  dq.PEER?.entries  ?? dq.affect    ?? []);
+        insertTensor('NCT',   dq.NCT?.entries   ?? dq.memory    ?? []);
+        insertTensor('SPINE', dq.SPINE?.entries ?? dq.learning  ?? []);
+    }
 }
 
 export function loadAgentFromDb(agentId: string) {
@@ -108,8 +144,11 @@ export function loadAgentFromDb(agentId: string) {
     const agentRow = database.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as any;
     if (!agentRow) return null;
 
-    const entries = database.prepare('SELECT * FROM dataquad_entries WHERE agent_id = ?').all(agentId) as any[];
+    const entries = database.prepare(
+        'SELECT * FROM dataquad_entries WHERE agent_id = ? AND (archived IS NULL OR archived = 0)'
+    ).all(agentId) as any[];
 
+    // Build the new DataQuadBundle shape as primary, with legacy keys as a compat shim.
     const agent: any = {
         id: agentRow.id,
         name: agentRow.name,
@@ -118,21 +157,61 @@ export function loadAgentFromDb(agentId: string) {
         swarmId: agentRow.swarm_id,
         tools: JSON.parse(agentRow.tools_json),
         dataQuad: {
-            context: [],
-            affect: [],
-            memory: [],
-            learning: []
+            // New canonical tensors
+            PCT:   { entries: [] as any[] },
+            PEER:  { entries: [] as any[] },
+            NCT:   { entries: [] as any[] },
+            SPINE: { entries: [] as any[] },
+            // Legacy compat keys (populated below for callers not yet updated)
+            context:  [] as any[],
+            affect:   [] as any[],
+            memory:   [] as any[],
+            learning: [] as any[],
         }
     };
 
-    for (const entry of entries) {
-        const tensorEntry = {
-            timestamp: entry.timestamp,
-            content: entry.content,
-            sequenceData: entry.sequence_json ? JSON.parse(entry.sequence_json) : undefined,
-            topologyIndex: entry.topology_index
+    for (const row of entries) {
+        const base = {
+            id: row.entry_uuid ?? String(row.id),
+            timestamp: row.timestamp,
+            content: row.content,
+            topologyIndex: row.topology_index,
+            sequenceData: row.sequence_json ? JSON.parse(row.sequence_json) : undefined,
         };
-        (agent.dataQuad as any)[entry.tensor_type].push(tensorEntry);
+
+        switch (row.tensor_type) {
+            case 'PCT':
+                agent.dataQuad.PCT.entries.push(base);
+                agent.dataQuad.context.push(base);   // legacy compat
+                break;
+            case 'PEER': {
+                const peerEntry = {
+                    ...base,
+                    classification: row.classification,
+                    promptHash: row.prompt_hash,
+                    fractureVirtues: row.fracture_virtues_json ? JSON.parse(row.fracture_virtues_json) : undefined,
+                    gatePathObserved: row.gate_path,
+                };
+                agent.dataQuad.PEER.entries.push(peerEntry);
+                agent.dataQuad.affect.push(peerEntry); // legacy compat
+                break;
+            }
+            case 'NCT':
+                agent.dataQuad.NCT.entries.push(base);
+                agent.dataQuad.memory.push(base);    // legacy compat
+                break;
+            case 'SPINE': {
+                const spineEntry = {
+                    ...base,
+                    linkedRecords: row.linked_records_json ? JSON.parse(row.linked_records_json) : [],
+                    verifiedAt: row.verified_at ?? row.timestamp,
+                    patternSignature: row.pattern_signature ?? '',
+                };
+                agent.dataQuad.SPINE.entries.push(spineEntry);
+                agent.dataQuad.learning.push(spineEntry); // legacy compat
+                break;
+            }
+        }
     }
 
     return agent;
@@ -152,13 +231,14 @@ export function getSystemMetrics() {
 
 /**
  * Collective Memory Lookup for Swarms (I-15)
+ * NCT = Nostalgic Context Tensor (formerly 'memory')
  */
 export function loadSwarmMemories(swarmId: string): any[] {
     const database = getDb();
     const query = `
         SELECT e.* FROM dataquad_entries e
         JOIN agents a ON e.agent_id = a.id
-        WHERE a.swarm_id = ? AND e.tensor_type = 'memory'
+        WHERE a.swarm_id = ? AND e.tensor_type = 'NCT'
         ORDER BY e.timestamp DESC
     `;
     const rows = database.prepare(query).all(swarmId) as any[];
@@ -171,36 +251,42 @@ export function loadSwarmMemories(swarmId: string): any[] {
 
 /**
  * Collective Learning Lookup for Swarms (I-21)
+ * SPINE = Stabilized Patterned Interpretive Nexus of Evidence (formerly 'learning')
  */
 export function loadSwarmLearnings(swarmId: string): any[] {
     const database = getDb();
     const query = `
         SELECT e.* FROM dataquad_entries e
         JOIN agents a ON e.agent_id = a.id
-        WHERE a.swarm_id = ? AND e.tensor_type = 'learning'
+        WHERE a.swarm_id = ? AND e.tensor_type = 'SPINE'
         ORDER BY e.timestamp DESC
     `;
     const rows = database.prepare(query).all(swarmId) as any[];
     return rows.map(r => ({
         timestamp: r.timestamp,
-        content: r.content
+        content: r.content,
+        patternSignature: r.pattern_signature,
+        linkedRecords: r.linked_records_json ? JSON.parse(r.linked_records_json) : [],
     }));
 }
 
 /**
  * Collective Affect Lookup for Swarms (I-23)
+ * PEER = Patterned Experiential Evidence Repository (formerly 'affect')
  */
 export function loadSwarmAffects(swarmId: string): any[] {
     const database = getDb();
     const query = `
         SELECT e.* FROM dataquad_entries e
         JOIN agents a ON e.agent_id = a.id
-        WHERE a.swarm_id = ? AND e.tensor_type = 'affect'
+        WHERE a.swarm_id = ? AND e.tensor_type = 'PEER'
         ORDER BY e.timestamp DESC
     `;
     const rows = database.prepare(query).all(swarmId) as any[];
     return rows.map(r => ({
         timestamp: r.timestamp,
-        content: r.content
+        content: r.content,
+        classification: r.classification,
+        promptHash: r.prompt_hash,
     }));
 }
