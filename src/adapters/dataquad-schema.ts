@@ -1,8 +1,63 @@
+// ── Legacy snapshot (preserved for backward compat) ────────────────────────
+/** @deprecated Use DataQuadBundle. Kept for OpenClaw serialization compat. */
 export interface DataQuadSnapshot {
   temporal: string[];
   contextual: string[];
   affective: string[];
   reflective: string[];
+}
+
+// ── PCT/PEER/NCT/SPINE — Rich per-entry interfaces ──────────────────────────
+
+/** Base entry shared by all four tensors */
+export interface DataQuadEntry {
+  id: string;        // UUID v4, generated at write time
+  timestamp: string; // ISO 8601
+  content: string;   // human-readable observation/record
+}
+
+// PCT – Present Context Tensor
+// Immediate observational records. Always delivered in full to the model.
+// Maps from: temporal (snapshot) / context (DB)
+export interface PCTEntry extends DataQuadEntry {
+  topologyIndex?: string; // sha256 fingerprint, 12-char prefix
+}
+
+// PEER – Patterned Experiential Evidence Repository
+// Anomaly log with four-class classification. Append-only JSONL + DB.
+// Maps from: affective (snapshot) / affect (DB)
+export type PEERClassification = 'Noise' | 'Drift' | 'Ghost' | 'Glitch';
+
+export interface PEEREntry extends DataQuadEntry {
+  classification: PEERClassification;
+  promptHash: string;          // sha256:... of the originating prompt
+  fractureVirtues?: string[];  // virtue names that caused fracture
+  gatePathObserved?: string;   // admitted | shallow-return | deep-return | quarantine
+}
+
+// NCT – Nostalgic Context Tensor
+// Long-term pattern memory. Queried by topology proximity.
+// Maps from: contextual (snapshot) / memory (DB)
+export interface NCTEntry extends DataQuadEntry {
+  topologyIndex: string;    // required for NCT (pattern matching key)
+  sequenceData?: unknown;   // reserved for structured reflection data
+}
+
+// SPINE – Stabilized Patterned Interpretive Nexus of Evidence
+// Append-only verified patterns with temporal threading.
+// Maps from: reflective (snapshot) / learning (DB)
+export interface SPINEEntry extends DataQuadEntry {
+  linkedRecords: string[];   // IDs of PCT/PEER/NCT entries that compose this pattern
+  verifiedAt: string;        // ISO 8601 — when the threshold was reached
+  patternSignature: string;  // sha256 of sorted linkedRecords — dedup key
+}
+
+// Unified bundle replacing DataQuadSnapshot for internal use
+export interface DataQuadBundle {
+  PCT: { entries: PCTEntry[] };
+  PEER: { entries: PEEREntry[] };
+  NCT: { entries: NCTEntry[] };
+  SPINE: { entries: SPINEEntry[] };
 }
 
 export interface ValidationResult {
